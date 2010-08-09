@@ -1,0 +1,174 @@
+#!/bin/bash
+
+# TODO(vchudnov): Create a bash autocompletion file
+
+function list_sessions() {
+    pushd "$EMACS_DESKTOP_REPOSITORY" >& /dev/null
+    echo "-->In $PWD"
+    if [[ $? ]]
+    then
+	ls */.emacs.desktop | sed 's/\([^\/]\)\(\/\.emacs\.desktop\)/\1/'
+	popd >& /dev/null
+    fi
+}
+
+function call_emacs() {
+    DESKTOP_SOCKET="$1"
+    DETACH="$2"
+    EVAL="$3"
+    if [[ -n "$4" ]] ; then
+	ALTERNATE="-a \"\""
+    fi
+    if  [[ -n "$EVAL" ]]
+    then
+	DOEVAL="--eval"
+	EVAL="(progn $EVAL )"
+    fi
+    CMD="unset ALTERNATE_EDITOR ; emacsclient -c -s \"\$DESKTOP_SOCKET\" \"\$DETACH\" $ALTERNATE \$DOEVAL \"\$EVAL\""
+    if [[ "$DEBUG" ]] ; then
+	echo "DESKTOP_SOCKET: $DESKTOP_SOCKET"
+	echo "DETACH:         $DETACH"
+	echo "EVAL:           $EVAL"
+	echo "ALTERNATE:      $ALTERNATE"
+	echo "$CMD"
+    fi
+    eval $CMD
+}
+
+function kill_emacs() {
+    DESKTOP_SOCKET_DIR="/tmp/ee/$1"
+    DESKTOP_SOCKET="$DESKTOP_SOCKET_DIR/.socket"
+    call_emacs "$DESKTOP_SOCKET" "-n" "(kill-emacs)"
+    return $?
+}
+
+if [[ "$1" == "--help" ]]
+then
+#print help
+    cat <<EOF
+ $0 [-c SERVER] [FILE...]
+ Run emacs in daemon/client mode
+   $0 -c SERVER FILE.... 
+     connects to SERVER (creating it if necessary) and opens
+     FILE... in a new frame (X or text). The buffer persists even when
+     the frame is closed
+   $0 -c SERVER
+     does the same thing but opens up a file called SERVER in the SERVER daemon
+   $0 FILE...
+     connects to an unnamed emacs daemon (creating it if necessary)
+     and opens FILE... in a new frame (X or text). The buffer is
+     removed from the server when the frame is closed. This is ideal
+     for using as the value of \$EDITOR
+   $0 -l
+     lists all the desktop sessions that have been saved.
+   $0 -k SERVER
+     kills the specified desktop session
+   $0 --kilall
+     kills all the running sessions
+   $0  --help
+     Displays this message
+EOF
+else
+    if [[ "$1" == "--debug" ]] ; then
+	DEBUG="true"
+	shift
+    else
+	DEBUG=""
+    fi
+    if [[ -z "$EMACS_DESKTOP_REPOSITORY" ]]
+    then
+	EMACS_DESKTOP_REPOSITORY="${HOME}/.emacs.d/desktop-sessions"
+    fi
+    
+    if [[ "$1" == "-l" ]]; then
+	list_sessions
+    elif [[ "$1" == "-k" ]]; then
+	echo "Killing"
+	shift
+	if [[ -z "$1" ]]; then
+	    echo "$0: No session to kill specified"
+	    exit -1
+	fi
+	if [[ "$(list_sessions | grep "$1" )" ]] ; then
+	    kill_emacs "$1"
+	    exit $?
+	else
+	    echo "$0: The specified desktop session to kill has not been found. Aborting."
+	    exit -1
+	fi
+	echo Done
+    elif [[ "$1" == "--killall" ]]; then
+	for session in "$(list_sessions)" ; do
+	    kill_emacs "$session"
+	done
+	# TODO(vchudnov): Get better escape code
+	exit $?
+    else
+	DETACH=""
+	EVAL=""
+	XDEFAULTS_LOCATION="$HOME/.Xdefaults"
+
+	if [[ "$1" == "-c" ]]
+	then
+        # We only detach if it's a named server AND we have an X display.
+	    if [[ -n "$DISPLAY" ]]
+	    then
+		if [[ -n "$XDEFAULTS_LOCATION" ]]
+		then
+                # ensure that the X settings for emacs are up to date
+		    xrdb -merge "$XDEFAULTS_LOCATION"
+		fi
+		DETACH="-n"
+	    fi
+	    DESKTOP_NAME="$2"
+	    shift
+	    shift
+	    DESKTOP_AUTOSAVE_FORCE="nil"
+	else
+	    DESKTOP_NAME="ee-desktop"
+	    DESKTOP_AUTOSAVE_FORCE="t"
+	fi
+
+	DESKTOP_DIR="$EMACS_DESKTOP_REPOSITORY/$DESKTOP_NAME"
+	DESKTOP_SOCKET_DIR="/tmp/ee/$DESKTOP_NAME"
+	DESKTOP_SOCKET="$DESKTOP_SOCKET_DIR/.socket"
+
+	mkdir -p "$DESKTOP_DIR"
+	mkdir -p "$DESKTOP_SOCKET_DIR"
+
+	SERVER_ACCESS="-s \"$DESKTOP_NAME\" -n"
+
+	EVAL="$EVAL (if (fboundp 'desktop-autosave-start) (desktop-autosave-start  \"${DESKTOP_NAME}\" $DESKTOP_AUTOSAVE_FORCE))"
+
+        # If we just had one file, -c $FILE would work to load and display
+        # the one file. In case more than one file is specified, we load
+        # and display the first one and just pre-load all the others. We
+        # do this by using elisp expressions.  Refer to
+        # http://www.gnu.org/s/emacs/manual/html_node/elisp/Visiting-Functions.html#Visiting-Functions
+
+	if [[ -n "$1" ]]
+	then
+	    EVAL="$EVAL (find-file \"$1\")"
+	    shift
+	fi
+
+	while [[ -n "$1" ]]
+	do
+	    EVAL="$EVAL (find-file-noselect \"$1\" )"
+	    shift
+	done
+	ALTERNATE=yes
+
+	call_emacs  "$DESKTOP_SOCKET" "$DETACH" "$EVAL" "$ALTERNATE"
+
+	# if  [[ -n "$EVAL" ]]
+	# then
+	#     DOEVAL="--eval"
+	#     EVAL="(progn $EVAL $POST_EVAL)"
+	# fi
+
+	# CMD="emacsclient -c -s \"\$DESKTOP_SOCKET\" \"\$DETACH\" -a \"\" \$DOEVAL \"\$EVAL\""
+	# echo "$CMD"
+	# eval $CMD
+    fi
+fi # do something
