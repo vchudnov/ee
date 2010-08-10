@@ -1,4 +1,35 @@
 #!/bin/bash
+# ee: A shell script to start and connect to named emacs servers
+# Copyright 2010 Victor Chudnovsky
+#
+# Author:  victor.chudnovsky+ee@gmail.com
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
+# Description:
+#
+# This shell script can be used to start a new named emacs server
+# process, or to connect to an already running emacs server process
+# with the given name. You can also connect to a singleton unnamed
+# emacs server, which is useful if you set the EDITOR shell variable
+# to be this script. If the desktop-autosave.el package is installed,
+# this script will also start autosaving the desktop, so that you can
+# quickly recover context should your session ever die or hang.
+#
+# Usage: Run this script with the --help flag to see a summary of the
+# usage.
 
 # TODO(vchudnov): Create a bash autocompletion file
 
@@ -38,7 +69,8 @@ function call_emacs() {
 function kill_emacs() {
     DESKTOP_SOCKET_DIR="/tmp/ee/$1"
     DESKTOP_SOCKET="$DESKTOP_SOCKET_DIR/.socket"
-    call_emacs "$DESKTOP_SOCKET" "-n" "(kill-emacs)"
+    call_emacs "$DESKTOP_SOCKET" "-n" \
+	"(progn (if (fboundp 'desktop-autosave-stop) (desktop-autosave-stop t)) (kill-emacs))"
     return $?
 }
 
@@ -63,10 +95,10 @@ then
      lists all the desktop sessions that have been saved.
    $0 -k SERVER
      kills the specified desktop session
-   $0 --kilall
+   $0 --killall
      kills all the running sessions
    $0  --help
-     Displays this message
+     displays this message
 EOF
 else
     if [[ "$1" == "--debug" ]] ; then
@@ -160,15 +192,5 @@ else
 	ALTERNATE=yes
 
 	call_emacs  "$DESKTOP_SOCKET" "$DETACH" "$EVAL" "$ALTERNATE"
-
-	# if  [[ -n "$EVAL" ]]
-	# then
-	#     DOEVAL="--eval"
-	#     EVAL="(progn $EVAL $POST_EVAL)"
-	# fi
-
-	# CMD="emacsclient -c -s \"\$DESKTOP_SOCKET\" \"\$DETACH\" -a \"\" \$DOEVAL \"\$EVAL\""
-	# echo "$CMD"
-	# eval $CMD
     fi
 fi # do something
