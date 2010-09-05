@@ -2,7 +2,7 @@
 # ee: A shell script to start and connect to named emacs servers
 # Copyright 2010 Victor Chudnovsky
 #
-# Author:  victor.chudnovsky+ee@gmail.com
+# Author: victor.chudnovsky+ee@gmail.com
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -30,33 +30,80 @@
 #
 # Usage: Run this script with the --help flag to see a summary of the
 # usage.
+#
+#    ee -c SERVER FILE.... 
+#      connects to SERVER (creating it if necessary) and opens
+#      FILE... in a new frame (X or text). The buffer persists even when
+#      the frame is closed
+#    ee FILE...
+#      connects to an unnamed emacs daemon (creating it if necessary)
+#      and opens FILE... in a new frame (X or text). The buffer is
+#      removed from the server when the frame is closed. This is ideal
+#      for using as the value of \$EDITOR
+#    ee -l
+#      lists all the desktop sessions that have been saved.
+#    ee -k SERVER
+#      kills the specified running emacs server
+#    ee --killall
+#      kills all the running emacs servers
+#    ee -d SERVER
+#      deletes from disk the specified emacs server's desktop file
+#    ee --deleteall
+#      deletes from disk all the emacs servers' desktop files
+#    ee --debug ...
+#      displays additional trace information while executing this script
+#    ee  --help
+#      displays this message
+#
+#   Advanced  flags (used for bash autocompletion, typically in ee_autocomplete.sh):
+#     --user_flags
+#       list of flags users would typically use to invoke ee on the
+#       command line.
+#     --flags_taking_sessions
+#       list of flags whose values could be an existing emacs server or
+#       desktop name. This list is formatted for use in a bash case
+#       statement.
+#
+# Installation:
+# 1. Put the ee script somewhere on your path
+# 2. If desired, install the desktop-autosave.el package so that it gets
+#    loaded when emacs starts
+# 3. Put the ee_autcomplete.sh script somewhere (either at the system
+#    level in /etc/bash_completion.d or under your home directory)
+# 4. Add the following to your .bashrc so that the ee_autocomplete.sh script gets
+#    sourced:
+#    . <PATH_TO_EE_AUTOCOMPLETE>/ee_autocomplete.sh
 
-# TODO(vchudnov): Create a bash autocompletion file
 
+# list_sessions
+# List all the desktop sessions under $EMACS_DESKTOP_REPOSITORY.
 function list_sessions() {
     pushd "$EMACS_DESKTOP_REPOSITORY" >& /dev/null
-    echo "-->In $PWD"
-    if [[ $? ]]
-    then
-	ls */.emacs.desktop | sed 's/\([^\/]\)\(\/\.emacs\.desktop\)/\1/'
+    if [[ $? ]]; then
+	ls */.emacs.desktop 2> /dev/null | sed 's/\([^\/]\)\(\/\.emacs\.desktop\)/\1/'
 	popd >& /dev/null
     fi
 }
 
+# call_emacs DESKTOP_SOCKET DETACH_CMD EMACS_EVAL USE_ALTERNATE_EDITOR
+# Invoke emacsclient using DESKTOP_SOCKET and passing DETACH_CMD as a
+# flag determining whether to detach from the terminal or not. Also
+# cause emacs to evaluate EMACS_EVAL. Tell emacsclient to use an
+# alternate editor if USE_ALTERNATE_EDITOR is non-empty; otherwise
+# tell emacs to start the server.
 function call_emacs() {
-    DESKTOP_SOCKET="$1"
-    DETACH="$2"
-    EVAL="$3"
-    if [[ -n "$4" ]] ; then
-	ALTERNATE="-a \"\""
+    local DESKTOP_SOCKET="$1"
+    local DETACH="$2"
+    local EVAL="$3"
+    if [[ -n "$4" ]]; then
+	local ALTERNATE="-a \"\""
     fi
-    if  [[ -n "$EVAL" ]]
-    then
-	DOEVAL="--eval"
-	EVAL="(progn $EVAL )"
+    if  [[ -n "$EVAL" ]]; then
+	local DOEVAL="--eval"
+	local EVAL="(progn $EVAL )"
     fi
-    CMD="unset ALTERNATE_EDITOR ; emacsclient -c -s \"\$DESKTOP_SOCKET\" \"\$DETACH\" $ALTERNATE \$DOEVAL \"\$EVAL\""
-    if [[ "$DEBUG" ]] ; then
+    local CMD="unset ALTERNATE_EDITOR ; emacsclient -c -s \"\$DESKTOP_SOCKET\" \"\$DETACH\" $ALTERNATE \$DOEVAL \"\$EVAL\" $REDIRECTION"
+    if [[ "$DEBUG" ]]; then
 	echo "DESKTOP_SOCKET: $DESKTOP_SOCKET"
 	echo "DETACH:         $DETACH"
 	echo "EVAL:           $EVAL"
@@ -66,26 +113,96 @@ function call_emacs() {
     eval $CMD
 }
 
-function kill_emacs() {
-    DESKTOP_SOCKET_DIR="/tmp/ee/$1"
-    DESKTOP_SOCKET="$DESKTOP_SOCKET_DIR/.socket"
-    call_emacs "$DESKTOP_SOCKET" "-n" \
-	"(progn (if (fboundp 'desktop-autosave-stop) (desktop-autosave-stop t)) (kill-emacs))"
+# confirm PROMPT
+# Print a confirmation prompt and process the user response. A return
+# value of 0 corresponds to a user reply of "yes".
+function confirm() {
+    read -p "$1"
+    [[ $REPLY =~ ^[Yy].*$ ]]
     return $?
 }
 
-if [[ "$1" == "--help" ]]
-then
-#print help
+# kill_emacs SESSION
+# Kill the running emacs server named SESSION after getting
+# confirmation from the user.
+function kill_emacs() {
+    local DESKTOP_SOCKET_DIR="/tmp/ee/$1"
+    local DESKTOP_SOCKET="$DESKTOP_SOCKET_DIR/.socket"
+    confirm "Really kill session $1? "
+    if (( ! $? )); then
+	call_emacs "$DESKTOP_SOCKET" "-n" \
+	    "(progn (if (fboundp 'desktop-autosave-stop) (desktop-autosave-stop t)) (kill-emacs))"
+	return $?
+    fi
+    return 0
+}
+
+# delete_session SESSION
+# Delete the desktop session SESSION under ${EMACS_DESKTOP_REPOSITORY}
+# after getting confirmation from the user.
+function delete_session() {
+    local DESKTOP_DIR="${EMACS_DESKTOP_REPOSITORY}/$1"
+    confirm "Really delete ${DESKTOP_DIR}? "
+    if (( ! $? )); then
+	rm -r "${DESKTOP_DIR}"
+	return $?
+    fi
+    return 0
+}
+
+# destroy_all things DESTROY_FUNCTION DESTROY_LABEL
+# Utility function to either kill or delete all ee sessions, since
+# both operations follow a similar pattern.  The function actually
+# used to perform the destructive operation is DESTROY_FUNCTION. It is
+# referred to in user messages as DESTROY_LABEL.
+function destroy_all_things() {
+    local destroy_function="$1"
+    local destroy_label="$2"
+    local exit_code=0
+    for session in $(list_sessions) ; do
+	"$destroy_function" "$session"
+	if [[ $? ]]; then
+	    echo "Completed $destroy_label on $session"
+	else
+	    echo "Could not $destroy_label $session"
+	    exit_code=1
+	fi
+    done
+    exit $exit_code
+}
+
+# destroy_one thing DESTROY_FUNCTION DESTROY_LABEL DESTROY_TARGET
+# Utility function to either kill or delete the particular ee session
+# DESTROY_TARGET, since both operations follow a similar pattern.  The
+# function actually used to perform the destructive operation is
+# DESTROY_FUNCTION. It is referred to in user messages as
+# DESTROY_LABEL.
+function destroy_one_thing() {
+    local destroy_function="$1"
+    local destroy_label="$2"
+    local destroy_target="$3"
+    if [[ -z "${destroy_target}" ]]; then
+	echo "$0: No session to ${destroy_label} specified"
+	exit -1
+    fi
+    if [[ "$(list_sessions | grep "$destroy_target" )" ]]; then
+	"$destroy_function" "$destroy_target"
+	exit $?
+    else
+	echo "$0: The specified desktop session to $destroy_label has not been found. Aborting."
+	exit -1
+    fi
+}
+
+if [[ "$1" == "--help" ]]; then
     cat <<EOF
  $0 [-c SERVER] [FILE...]
- Run emacs in daemon/client mode
+ Run emacs in daemon/client mode, starting the emacs desktop-autosave package
+ if available.
    $0 -c SERVER FILE.... 
      connects to SERVER (creating it if necessary) and opens
      FILE... in a new frame (X or text). The buffer persists even when
      the frame is closed
-   $0 -c SERVER
-     does the same thing but opens up a file called SERVER in the SERVER daemon
    $0 FILE...
      connects to an unnamed emacs daemon (creating it if necessary)
      and opens FILE... in a new frame (X or text). The buffer is
@@ -94,59 +211,64 @@ then
    $0 -l
      lists all the desktop sessions that have been saved.
    $0 -k SERVER
-     kills the specified desktop session
+     kills the specified running emacs server
    $0 --killall
-     kills all the running sessions
+     kills all the running emacs servers
+   $0 -d SERVER
+     deletes from disk the specified emacs server's desktop file
+   $0 --deleteall
+     deletes from disk all the emacs servers' desktop files
+   $0 --debug ...
+     displays additional trace information while executing this script
    $0  --help
      displays this message
+
+  Advanced  flags (used for bash autocompletion, typically in ee_autocomplete.sh):
+    --user_flags
+      list of flags users would typically use to invoke ee on the
+      command line.
+    --flags_taking_sessions
+      list of flags whose values could be an existing emacs server or
+      desktop name. This list is formatted for use in a bash case
+      statement.
+
 EOF
+elif [[ "$1" == "--user_flags" ]]; then
+    echo "-c -l -k --killall -d --deleteall --help"
+elif [[ "$1" == "--flags_taking_sessions" ]]; then
+    echo "-c|-k|-d"
 else
     if [[ "$1" == "--debug" ]] ; then
 	DEBUG="true"
+	REDIRECTION=""
 	shift
     else
 	DEBUG=""
+	REDIRECTION=">&/dev/null"
     fi
-    if [[ -z "$EMACS_DESKTOP_REPOSITORY" ]]
-    then
+    if [[ -z "$EMACS_DESKTOP_REPOSITORY" ]]; then
 	EMACS_DESKTOP_REPOSITORY="${HOME}/.emacs.d/desktop-sessions"
     fi
     
     if [[ "$1" == "-l" ]]; then
 	list_sessions
     elif [[ "$1" == "-k" ]]; then
-	echo "Killing"
-	shift
-	if [[ -z "$1" ]]; then
-	    echo "$0: No session to kill specified"
-	    exit -1
-	fi
-	if [[ "$(list_sessions | grep "$1" )" ]] ; then
-	    kill_emacs "$1"
-	    exit $?
-	else
-	    echo "$0: The specified desktop session to kill has not been found. Aborting."
-	    exit -1
-	fi
-	echo Done
+	destroy_one_thing kill_emacs "kill" "$2"
     elif [[ "$1" == "--killall" ]]; then
-	for session in "$(list_sessions)" ; do
-	    kill_emacs "$session"
-	done
-	# TODO(vchudnov): Get better escape code
-	exit $?
+	destroy_all_things kill_emacs "kill"
+    elif [[ "$1" == "-d" ]]; then
+	destroy_one_thing delete_session "delete" "$2"
+    elif [[ "$1" == "--deleteall" ]]; then
+	destroy_all_things delete_session "delete"
     else
 	DETACH=""
 	EVAL=""
 	XDEFAULTS_LOCATION="$HOME/.Xdefaults"
 
-	if [[ "$1" == "-c" ]]
-	then
+	if [[ "$1" == "-c" ]]; then
         # We only detach if it's a named server AND we have an X display.
-	    if [[ -n "$DISPLAY" ]]
-	    then
-		if [[ -n "$XDEFAULTS_LOCATION" ]]
-		then
+	    if [[ -n "$DISPLAY" ]]; then
+		if [[ -n "$XDEFAULTS_LOCATION" ]]; then
                 # ensure that the X settings for emacs are up to date
 		    xrdb -merge "$XDEFAULTS_LOCATION"
 		fi
@@ -178,14 +300,12 @@ else
         # do this by using elisp expressions.  Refer to
         # http://www.gnu.org/s/emacs/manual/html_node/elisp/Visiting-Functions.html#Visiting-Functions
 
-	if [[ -n "$1" ]]
-	then
+	if [[ -n "$1" ]]; then
 	    EVAL="$EVAL (find-file \"$1\")"
 	    shift
 	fi
 
-	while [[ -n "$1" ]]
-	do
+	while [[ -n "$1" ]]; do
 	    EVAL="$EVAL (find-file-noselect \"$1\" )"
 	    shift
 	done

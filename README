@@ -1,0 +1,59 @@
+ee_autocomplete.sh: Bash autocompletion file for the ee utility
+Copyright 2010 Victor Chudnovsky
+Author: victor.chudnovsky+ee@gmail.com
+
+Description:
+
+This shell script can be used to start a new named emacs server
+process, or to connect to an already running emacs server process
+with the given name. You can also connect to a singleton unnamed
+emacs server, which is useful if you set the EDITOR shell variable
+to be this script. If the desktop-autosave.el package is installed,
+this script will also start autosaving the desktop, so that you can
+quickly recover context should your session ever die or hang.
+
+Usage: Run this script with the --help flag to see a summary of the
+usage.
+
+   ee -c SERVER FILE.... 
+     connects to SERVER (creating it if necessary) and opens
+     FILE... in a new frame (X or text). The buffer persists even when
+     the frame is closed
+   ee FILE...
+     connects to an unnamed emacs daemon (creating it if necessary)
+     and opens FILE... in a new frame (X or text). The buffer is
+     removed from the server when the frame is closed. This is ideal
+     for using as the value of \$EDITOR
+   ee -l
+     lists all the desktop sessions that have been saved.
+   ee -k SERVER
+     kills the specified running emacs server
+   ee --killall
+     kills all the running emacs servers
+   ee -d SERVER
+     deletes from disk the specified emacs server's desktop file
+   ee --deleteall
+     deletes from disk all the emacs servers' desktop files
+   ee --debug ...
+     displays additional trace information while executing this script
+   ee  --help
+     displays this message
+
+  Advanced  flags (used for bash autocompletion, typically in ee_autocomplete.sh):
+    --user_flags
+      list of flags users would typically use to invoke ee on the
+      command line.
+    --flags_taking_sessions
+      list of flags whose values could be an existing emacs server or
+      desktop name. This list is formatted for use in a bash case
+      statement.
+
+Installation:
+1. Put the ee script somewhere on your path
+2. If desired, install the desktop-autosave.el package so that it gets
+   loaded when emacs starts
+3. Put the ee_autcomplete.sh script somewhere (either at the system
+   level in /etc/bash_completion.d or under your home directory)
+4. Add the following to your .bashrc so that the ee_autocomplete.sh script gets
+   sourced:
+   . <PATH_TO_EE_AUTOCOMPLETE>/ee_autocomplete.sh
