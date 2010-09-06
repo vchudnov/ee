@@ -21,7 +21,9 @@
 # in ~/.bashrc), it will autocomplete the ee flags and existing emacs
 # server sessions.
 
-function _ee(){
+set -o nounset
+shopt -s extglob
+function _ee() {
     COMPREPLY=()
     local cur="$2"
     local prev="$3"
@@ -32,7 +34,7 @@ function _ee(){
 	local flags_taking_sessions="$(ee --flags_taking_sessions)"
 	local sessions="$(ee -l)"
 	case "$prev" in
-	    @($flags_taking_sessions)) COMPREPLY=( $(compgen -W "${sessions}" -- "${cur}") );;
+ 	    @($flags_taking_sessions)) COMPREPLY=( $(compgen -W "${sessions}" -- "${cur}") );;
 	esac  
     fi
 }

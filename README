@@ -56,4 +56,8 @@ Installation:
    level in /etc/bash_completion.d or under your home directory)
 4. Add the following to your .bashrc so that the ee_autocomplete.sh script gets
    sourced:
-   . <PATH_TO_EE_AUTOCOMPLETE>/ee_autocomplete.sh
+     . <PATH_TO_EE_AUTOCOMPLETE>/ee_autocomplete.sh
+5. Add the following to your .bashrc in order to have your deault
+   system editor come up quickly (since this will be a persitent emacs
+   server only instantiated once):
+     export EDITOR=ee
