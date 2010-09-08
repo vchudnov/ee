@@ -89,6 +89,14 @@ function list_sessions() {
     fi
 }
 
+# decho MESSAGE
+# Echo a message only in debug mode
+function decho() {
+    if [[ "$DEBUG" ]]; then
+	echo "$*"
+    fi
+}
+
 # call_emacs DESKTOP_SOCKET DETACH_CMD EMACS_EVAL USE_ALTERNATE_EDITOR
 # Invoke emacsclient using DESKTOP_SOCKET and passing DETACH_CMD as a
 # flag determining whether to detach from the terminal or not. Also
@@ -106,12 +114,9 @@ function call_emacs() {
 	local DOEVAL="--eval"
 	local EVAL="(progn $EVAL )"
     fi
-    local CMD="unset ALTERNATE_EDITOR ; emacsclient -c -s \"\$DESKTOP_SOCKET\" \"\$DETACH\" $ALTERNATE \$DOEVAL \"\$EVAL\" $REDIRECTION"
+    local CMD="unset ALTERNATE_EDITOR ; emacsclient -c -s \"$DESKTOP_SOCKET\" $DETACH $ALTERNATE $DOEVAL \"\$EVAL\" $REDIRECTION"
     if [[ "$DEBUG" ]]; then
-	echo "DESKTOP_SOCKET: $DESKTOP_SOCKET"
-	echo "DETACH:         $DETACH"
 	echo "EVAL:           $EVAL"
-	echo "ALTERNATE:      $ALTERNATE"
 	echo "$CMD"
     fi
     eval $CMD
@@ -128,7 +133,8 @@ function confirm() {
 
 # kill_emacs SESSION
 # Kill the running emacs server named SESSION after getting
-# confirmation from the user.
+# confirmation from the user. A return value of 1 means something was
+# killed.
 function kill_emacs() {
     local DESKTOP_SOCKET_DIR="/tmp/ee/$1"
     local DESKTOP_SOCKET="$DESKTOP_SOCKET_DIR/.socket"
@@ -136,20 +142,25 @@ function kill_emacs() {
     if (( ! $? )); then
 	call_emacs "$DESKTOP_SOCKET" "-n" \
 	    "(progn (if (fboundp 'desktop-autosave-stop) (desktop-autosave-stop t)) (kill-emacs))"
-	return $?
+	if (( ! $? )); then
+	    return 1
+	fi
     fi
     return 0
 }
 
 # delete_session SESSION
 # Delete the desktop session SESSION under ${EMACS_DESKTOP_REPOSITORY}
-# after getting confirmation from the user.
+# after getting confirmation from the user. A return value of 1 means
+# something was killed.
 function delete_session() {
     local DESKTOP_DIR="${EMACS_DESKTOP_REPOSITORY}/$1"
     confirm "Really delete ${DESKTOP_DIR}? "
     if (( ! $? )); then
 	rm -r "${DESKTOP_DIR}"
-	return $?
+	if (( ! $? )); then
+	    return 1
+	fi
     fi
     return 0
 }
@@ -165,10 +176,10 @@ function destroy_all_things() {
     local exit_code=0
     for session in $(list_sessions) ; do
 	"$destroy_function" "$session"
-	if [[ $? ]]; then
+	if (( $? )); then
 	    echo "Completed $destroy_label on $session"
 	else
-	    echo "Could not $destroy_label $session"
+	    decho "Could not $destroy_label $session"
 	    exit_code=1
 	fi
     done
@@ -248,7 +259,14 @@ else
 	shift
     else
 	DEBUG=""
-	REDIRECTION=">&/dev/null"
+
+	# Only redirect stdout if we're not in a tty--otherwise
+	# there's no output device!
+	if [[ -z "$DISPLAY" ]]; then
+	    REDIRECTION="2> /dev/null"
+	else
+	    REDIRECTION=">& /dev/null"
+	fi
     fi
     if [[ -z "$EMACS_DESKTOP_REPOSITORY" ]]; then
 	EMACS_DESKTOP_REPOSITORY="${HOME}/.emacs.d/desktop-sessions"
