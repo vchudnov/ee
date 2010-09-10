@@ -38,4 +38,5 @@ function _ee() {
 	esac  
     fi
 }
-complete -F _ee ee
+complete -o default -F _ee ee
+
