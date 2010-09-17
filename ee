@@ -211,7 +211,7 @@ function destroy_one_thing() {
 
 if [[ "$1" == "--help" ]]; then
     cat <<EOF
- $0 [-c SERVER] [FILE...]
+ $0 [--debug] [--tty] [-c SERVER] [FILE...]
  Run emacs in daemon/client mode, starting the emacs desktop-autosave package
  if available.
    $0 -c SERVER FILE.... 
@@ -233,6 +233,8 @@ if [[ "$1" == "--help" ]]; then
      deletes from disk the specified emacs server's desktop file
    $0 --deleteall
      deletes from disk all the emacs servers' desktop files
+   $0 --tty ....
+     runs in terminal mode, even in an X session
    $0 --debug ...
      displays additional trace information while executing this script
    $0  --help
@@ -249,7 +251,7 @@ if [[ "$1" == "--help" ]]; then
 
 EOF
 elif [[ "$1" == "--user_flags" ]]; then
-    echo "-c -l -k --killall -d --deleteall --help"
+    echo "-c -l -k --killall -d --deleteall --help --debug --user_flags --tty"
 elif [[ "$1" == "--flags_taking_sessions" ]]; then
     echo "-c|-k|-d"
 else
@@ -267,6 +269,12 @@ else
 	else
 	    REDIRECTION=">& /dev/null"
 	fi
+    fi
+    if [[ "$1" == "--tty" ]] ; then
+	TTY="true"
+	shift
+    else
+	TTY=""
     fi
     if [[ -z "$EMACS_DESKTOP_REPOSITORY" ]]; then
 	EMACS_DESKTOP_REPOSITORY="${HOME}/.emacs.d/desktop-sessions"
@@ -286,12 +294,14 @@ else
 	DETACH=""
 	EVAL=""
 	XDEFAULTS_LOCATION="$HOME/.Xdefaults"
-
+	if [[ -n "$TTY" ]]; then
+	    DETACH="-nw"
+	fi
 	if [[ "$1" == "-c" ]]; then
-        # We only detach if it's a named server AND we have an X display.
-	    if [[ -n "$DISPLAY" ]]; then
+            # We only detach if it's a named server AND we have an X display AND --tty was not specified.
+	    if [[ -n "$DISPLAY"  && -z "$TTY" ]]; then
 		if [[ -n "$XDEFAULTS_LOCATION" ]]; then
-                # ensure that the X settings for emacs are up to date
+                     # ensure that the X settings for emacs are up to date
 		    xrdb -merge "$XDEFAULTS_LOCATION"
 		fi
 		DETACH="-n"
