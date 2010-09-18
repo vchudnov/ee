@@ -77,6 +77,12 @@
 #    system editor come up quickly (since this will be a persitent emacs
 #    server only instantiated once):
 #      export EDITOR=ee
+#
+# Customization:
+#
+# The environment variable EMACS_DESKTOP_REPOSITORY controls where the
+# saved desktops are placed. If not set, desktops are saved to
+# ${HOME}/.emacs.d/desktop-session
 
 
 # list_sessions
@@ -209,12 +215,96 @@ function destroy_one_thing() {
     fi
 }
 
-if [[ "$1" == "--help" ]]; then
+# Recognized flags (FLAG_*) and the values that will be parse from the
+# command line (ARG_*).
+ARG_HELP="";	     FLAG_HELP="--help"
+ARG_LIST="";	     FLAG_LIST="-l"
+ARG_CONNECT="";	     FLAG_CONNECT="-c"
+ARG_KILL="";	     FLAG_KILL="-k"
+ARG_DELETE="";	     FLAG_DELETE="-d"
+ARG_KILLALL="";	     FLAG_KILLALL="--killall"
+ARG_DELETEALL="";    FLAG_DELETEALL="--deleteall"
+ARG_TTY="";	     FLAG_TTY="--tty"
+ARG_DEBUG="";	     FLAG_DEBUG="--debug"
+ARG_USERFLAGS="";    FLAG_USERFLAGS="--user_flags"
+ARG_FLAGSESSIONS=""; FLAG_FLAGSESSIONS="--flags_taking_sessions"
+ARG_ENDFLAGS=""      FLAG_ENDFLAGS="--"
+
+# Files to load when connecting to a session.
+LOAD_FILE=""
+
+# File to select when starting the client session.
+SELECT_FILE=""
+
+# disallow_invalid_flag CURRENT_FLAG PREVIOUS_FLAG 
+# Exit with an error if CURRENT_FLAG starts with a dash, so it was
+# likely meant as an option. This is intended to catch an intended
+# option CURRENT_FLAG directly following a flag PREVIOUS_FLAG that
+# takes an argument. However, if ARG_ENDFLAGS is set, this check
+# always passes.
+function disallow_invalid_flag() {
+    if [[ "$1" =~ ^-.* && -z $ARG_ENDFLAGS ]];then
+	echo "Invalid flag $1 directly after flag $2. Try $FLAG_HELP."
+	exit -2
+    fi
+}
+
+# append_file FILE PREVIOUS_FLAG
+# Appends FILE to SELECT_FILE and LOAD_FILE as appropriate, after
+# calling disallow_invalid_flag
+function append_file() {
+    disallow_invalid_flag "$1" "$2"
+    if [[ -z "$SELECT_FILE" ]]; then
+	SELECT_FILE="(find-file \"$1\")"
+    fi
+    LOAD_FILE="$LOAD_FILE (find-file-noselect \"$1\" )"
+}
+
+# get_target TARGET PREVIOUS_FLAG
+# Sets the global TARGET after calling disallow_invalid_flag
+function get_target() {
+    disallow_invalid_flag "$1" "$2"
+    TARGET="$1"
+}
+
+# Parse flags
+ARG_LAST=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+	$FLAG_HELP) ARG_HELP=1;;
+	$FLAG_LIST) ARG_LIST=1;;
+	$FLAG_CONNECT) ARG_CONNECT=1; get_target "$2" "$1"; shift;;
+	$FLAG_KILL) ARG_KILL=1; get_target "$2" "$1"; shift;;
+	$FLAG_DELETE) ARG_DELETE=1; get_target "$2" "$1"; shift;;
+	$FLAG_KILLALL) ARG_KILLALL=1;;
+	$FLA_DELETEALL) ARG_DELETEALL=1;;
+	$FLAG_TTY) ARG_TTY=1;;
+	$FLAG_DEBUG) ARG_DEBUG=1;;
+	$FLAG_USERFLAGS) ARG_USERFLAGS=1;;
+	$FLAG_FLAGSESSIONS) ARG_FLAGSESSIONS=1;;
+	$FLAG_ENDFLAGS) ARG_ENDFLAGS=1;;
+	*) append_file "$1" "$ARG_LAST";;	
+    esac
+    ARG_LAST="$1"
+    shift
+done
+
+# Don't allow some flag combinations
+NUM_EXCLUSIVE_COMMANDS=$(( ARG_LIST + ARG_CONNECT + ARG_KILL + ARG_DELETE + ARG_KILLALL + ARG_DELETE_ALL + ARG_USERFLAGS + ARG_FLAGSESSIONS ))
+if [[ "$NUM_EXCLUSIVE_COMMANDS" -gt 1 ]]; then
+    echo -e \
+	"At most one of of the following flags should be specified:\n" \
+	"  $FLAG_LIST $FLAG_CONNECT $FLAG_KILL $FLAG_DELETE $FLAG_KILLALL $FLAG_DELETE_ALL $FLAG_USERFLAGS $FLAG_FLAGSESSIONS"
+    exit -1
+fi
+
+
+if [[  -n $ARG_HELP ]]; then
     cat <<EOF
- $0 [--debug] [--tty] [-c SERVER] [FILE...]
+ $0 [OPTIONS] [$FLAG_CONNECT SERVER] [FILE...]
  Run emacs in daemon/client mode, starting the emacs desktop-autosave package
  if available.
-   $0 -c SERVER FILE.... 
+   $0 $FLAG_CONNECT SERVER FILE.... 
      connects to SERVER (creating it if necessary) and opens
      FILE... in a new frame (X or text). The buffer persists even when
      the frame is closed
@@ -223,92 +313,93 @@ if [[ "$1" == "--help" ]]; then
      and opens FILE... in a new frame (X or text). The buffer is
      removed from the server when the frame is closed. This is ideal
      for using as the value of \$EDITOR
-   $0 -l
+   $0 $FLAG_LIST
      lists all the desktop sessions that have been saved.
-   $0 -k SERVER
+   $0 $FLAG_KILL SERVER
      kills the specified running emacs server
-   $0 --killall
+   $0 $FLAG_KILLALL
      kills all the running emacs servers
-   $0 -d SERVER
+   $0 $FLAG_DELETE SERVER
      deletes from disk the specified emacs server's desktop file
-   $0 --deleteall
+   $0 $FLAG_DELETEALL
      deletes from disk all the emacs servers' desktop files
-   $0 --tty ....
-     runs in terminal mode, even in an X session
-   $0 --debug ...
-     displays additional trace information while executing this script
-   $0  --help
+   $0  $FLAG_HELP
      displays this message
+ OPTIONS is one of:
+   $FLAG_TTY
+     runs in terminal mode, even in an X session
+   $FLAG_DEBUG
+     displays additional trace information while executing this script
 
-  Advanced  flags (used for bash autocompletion, typically in ee_autocomplete.sh):
-    --user_flags
+  Advanced  flags (used for bash autocompletion, typically
+  in ee_autocomplete.sh):
+    $FLAG_USERFLAGS
       list of flags users would typically use to invoke ee on the
       command line.
-    --flags_taking_sessions
+    $FLAG_FLAGSESSIONS
       list of flags whose values could be an existing emacs server or
       desktop name. This list is formatted for use in a bash case
       statement.
 
 EOF
-elif [[ "$1" == "--user_flags" ]]; then
-    echo "-c -l -k --killall -d --deleteall --help --debug --user_flags --tty"
-elif [[ "$1" == "--flags_taking_sessions" ]]; then
-    echo "-c|-k|-d"
+elif [[ -n $ARG_USERFLAGS ]]; then
+    echo "$FLAG_HELP $FLAG_LIST $FLAG_CONNECT $FLAG_KILL $FLAG_DELETE" \
+	"$FLAG_KILLALL $FLAG_DELETEALL $FLAG_TTY $FLAG_DEBUG" \
+	"$FLAG_USERFLAGS $FLAG_FLAGSESSIONS"
+elif [[ -n $ARG_FLAGSESSIONS ]]; then
+    echo "${FLAG_CONNECT}|${FLAG_KILL}|${FLAG_DELETE}"
 else
-    if [[ "$1" == "--debug" ]] ; then
-	DEBUG="true"
+    if [[ -z "$DISPLAY" || -n $ARG_TTY ]]; then
+	TTY="true"
+    else
+	TTY=""
+    fi
+
+    if [[ -n "$ARG_DEBUG" ]] ; then
 	REDIRECTION=""
 	shift
     else
-	DEBUG=""
-
 	# Only redirect stdout if we're not in a tty--otherwise
 	# there's no output device!
-	if [[ -z "$DISPLAY" ]]; then
+	if [[ -n $TTY ]]; then
 	    REDIRECTION="2> /dev/null"
 	else
 	    REDIRECTION=">& /dev/null"
 	fi
     fi
-    if [[ "$1" == "--tty" ]] ; then
-	TTY="true"
-	shift
-    else
-	TTY=""
-    fi
+
     if [[ -z "$EMACS_DESKTOP_REPOSITORY" ]]; then
 	EMACS_DESKTOP_REPOSITORY="${HOME}/.emacs.d/desktop-sessions"
     fi
     
-    if [[ "$1" == "-l" ]]; then
+    if [[ -n $ARG_LIST ]]; then
 	list_sessions
-    elif [[ "$1" == "-k" ]]; then
-	destroy_one_thing kill_emacs "kill" "$2"
-    elif [[ "$1" == "--killall" ]]; then
+    elif [[ -n $ARG_KILL ]]; then
+	destroy_one_thing kill_emacs "kill" "$TARGET"
+    elif [[ -n $ARG_KILLALL ]]; then
 	destroy_all_things kill_emacs "kill"
-    elif [[ "$1" == "-d" ]]; then
-	destroy_one_thing delete_session "delete" "$2"
-    elif [[ "$1" == "--deleteall" ]]; then
+    elif [[ -n $ARG_DELETE ]]; then
+	destroy_one_thing delete_session "delete" "$TARGET"
+    elif [[ -n $ARG_DELETEALL ]]; then
 	destroy_all_things delete_session "delete"
     else
 	DETACH=""
 	EVAL=""
 	XDEFAULTS_LOCATION="$HOME/.Xdefaults"
-	if [[ -n "$TTY" ]]; then
+
+        # We only detach if it's a named server AND we're not in
+        # TTY mode
+	if [[ -n $TTY ]]; then
 	    DETACH="-nw"
-	fi
-	if [[ "$1" == "-c" ]]; then
-            # We only detach if it's a named server AND we have an X display AND --tty was not specified.
-	    if [[ -n "$DISPLAY"  && -z "$TTY" ]]; then
-		if [[ -n "$XDEFAULTS_LOCATION" ]]; then
+	elif [[ -n $ARG_CONNECT ]]; then
+	    if [[ -n "$XDEFAULTS_LOCATION" ]]; then
                      # ensure that the X settings for emacs are up to date
-		    xrdb -merge "$XDEFAULTS_LOCATION"
-		fi
-		DETACH="-n"
+		xrdb -merge "$XDEFAULTS_LOCATION"
 	    fi
-	    DESKTOP_NAME="$2"
-	    shift
-	    shift
+	    DETACH="-n"
+	fi
+	if [[ -n $ARG_CONNECT ]]; then
+	    DESKTOP_NAME="$TARGET"
 	    DESKTOP_AUTOSAVE_FORCE="nil"
 	else
 	    DESKTOP_NAME="ee-desktop"
@@ -324,7 +415,7 @@ else
 
 	SERVER_ACCESS="-s \"$DESKTOP_NAME\" -n"
 
-	EVAL="$EVAL (if (fboundp 'desktop-autosave-start) (desktop-autosave-start  \"${DESKTOP_NAME}\" $DESKTOP_AUTOSAVE_FORCE))"
+	EVAL="$EVAL (if (fboundp 'desktop-autosave-start) (desktop-autosave-start  \"${DESKTOP_NAME}\" $DESKTOP_AUTOSAVE_FORCE)) $LOAD_FILE $SELECT_FILE"
 
         # If we just had one file, -c $FILE would work to load and display
         # the one file. In case more than one file is specified, we load
@@ -332,15 +423,7 @@ else
         # do this by using elisp expressions.  Refer to
         # http://www.gnu.org/s/emacs/manual/html_node/elisp/Visiting-Functions.html#Visiting-Functions
 
-	if [[ -n "$1" ]]; then
-	    EVAL="$EVAL (find-file \"$1\")"
-	    shift
-	fi
 
-	while [[ -n "$1" ]]; do
-	    EVAL="$EVAL (find-file-noselect \"$1\" )"
-	    shift
-	done
 	ALTERNATE=yes
 
 	call_emacs  "$DESKTOP_SOCKET" "$DETACH" "$EVAL" "$ALTERNATE"

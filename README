@@ -12,7 +12,9 @@ to be this script. If the desktop-autosave.el package is installed,
 this script will also start autosaving the desktop, so that you can
 quickly recover context should your session ever die or hang.
 
-Usage: Run this script with the --help flag to see a summary of the
+Usage:
+
+Run this script with the --help flag to see a summary of the
 usage.
 
    ee -c SERVER FILE.... 
@@ -49,6 +51,7 @@ usage.
       statement.
 
 Installation:
+
 1. Put the ee script somewhere on your path
 2. If desired, install the desktop-autosave.el package so that it gets
    loaded when emacs starts
@@ -61,3 +64,9 @@ Installation:
    system editor come up quickly (since this will be a persitent emacs
    server only instantiated once):
      export EDITOR=ee
+
+Customization:
+
+The environment variable EMACS_DESKTOP_REPOSITORY controls where the
+saved desktops are placed. If not set, desktops are saved to
+${HOME}/.emacs.d/desktop-session
