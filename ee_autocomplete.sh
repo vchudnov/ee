@@ -21,7 +21,10 @@
 # in ~/.bashrc), it will autocomplete the ee flags and existing emacs
 # server sessions.
 
+# Store previous nounset value.
+prev_unset=`set +o | grep nounset`
 set -o nounset
+
 shopt -s extglob
 function _ee() {
     COMPREPLY=()
@@ -40,3 +43,5 @@ function _ee() {
 }
 complete -o default -F _ee ee
 
+# Restore previous nounset value.
+$prev_unset
