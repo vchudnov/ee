@@ -22,6 +22,10 @@ usage.
      FILE... in a new frame (X or text). The buffer persists even when
      the frame is closed
    ee FILE...
+     if already running under a SERVER (eg a shell within an Emacs session
+     started by `ee -c SERVER`), opens a file in that server; that way, you
+     can open files from withing your inferior shell into the parent Emacs
+     session ($EE_CURRENT_SESSION is used for this purpose). Otherwise,
      connects to an unnamed emacs daemon (creating it if necessary)
      and opens FILE... in a new frame (X or text). The buffer is
      removed from the server when the frame is closed. This is ideal

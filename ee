@@ -1,5 +1,5 @@
 #!/bin/bash
-# ee: A shell script to start and connect to named emacs servers
+# ee: A shell script to start and connect to named Emacs servers
 # Copyright 2010 Victor Chudnovsky
 #
 # Author: victor.chudnovsky+ee@gmail.com
@@ -20,10 +20,10 @@
 #
 # Description:
 #
-# This shell script can be used to start a new named emacs server
-# process, or to connect to an already running emacs server process
+# This shell script can be used to start a new named Emacs server
+# process, or to connect to an already running Emacs server process
 # with the given name. You can also connect to a singleton unnamed
-# emacs server, which is useful if you set the EDITOR shell variable
+# Emacs server, which is useful if you set the EDITOR shell variable
 # to be this script. If the desktop-autosave.el package is installed,
 # this script will also start autosaving the desktop, so that you can
 # quickly recover context should your session ever die or hang.
@@ -36,20 +36,24 @@
 #      FILE... in a new frame (X or text). The buffer persists even when
 #      the frame is closed
 #    ee FILE...
-#      connects to an unnamed emacs daemon (creating it if necessary)
-#      and opens FILE... in a new frame (X or text). The buffer is
-#      removed from the server when the frame is closed. This is ideal
-#      for using as the value of \$EDITOR
+#      if already running under a SERVER (eg a shell within an Emacs session
+#      started by `ee -c SERVER`), opens a file in that server; that way, you
+#      can open files from withing your inferior shell into the parent Emacs
+#      session ($EE_CURRENT_SESSION is used for this purpose). Otherwise,
+#      connects to an unnamed Emacs daemon (creating it if necessary) and opens
+#      FILE... in a new frame (X or text). The buffer is removed from the server
+#      when the frame is closed. This is ideal for using as the value of
+#      \$EDITOR
 #    ee -l
 #      lists all the desktop sessions that have been saved.
 #    ee -k SERVER
-#      kills the specified running emacs server
+#      kills the specified running Emacs server
 #    ee --killall
-#      kills all the running emacs servers
+#      kills all the running Emacs servers
 #    ee -d SERVER
-#      deletes from disk the specified emacs server's desktop file
+#      deletes from disk the specified Emacs server's desktop file
 #    ee --deleteall
-#      deletes from disk all the emacs servers' desktop files
+#      deletes from disk all the Emacs servers' desktop files
 #    ee --debug ...
 #      displays additional trace information while executing this script
 #    ee  --help
@@ -60,14 +64,14 @@
 #       list of flags users would typically use to invoke ee on the
 #       command line.
 #     --flags_taking_sessions
-#       list of flags whose values could be an existing emacs server or
+#       list of flags whose values could be an existing Emacs server or
 #       desktop name. This list is formatted for use in a bash case
 #       statement.
 #
 # Installation:
 # 1. Put the ee script somewhere on your path
 # 2. If desired, install the desktop-autosave.el package so that it gets
-#    loaded when emacs starts
+#    loaded when Emacs starts
 # 3. Put the ee_autcomplete.sh script somewhere (either at the system
 #    level in /etc/bash_completion.d or under your home directory)
 # 4. Add the following to your .bashrc so that the ee_autocomplete.sh script gets
@@ -106,9 +110,9 @@ function decho() {
 # call_emacs DESKTOP_SOCKET DETACH_CMD EMACS_EVAL USE_ALTERNATE_EDITOR
 # Invoke emacsclient using DESKTOP_SOCKET and passing DETACH_CMD as a
 # flag determining whether to detach from the terminal or not. Also
-# cause emacs to evaluate EMACS_EVAL. Tell emacsclient to use an
+# cause Emacs to evaluate EMACS_EVAL. Tell emacsclient to use an
 # alternate editor if USE_ALTERNATE_EDITOR is non-empty; otherwise
-# tell emacs to start the server.
+# tell Emacs to start the server.
 function call_emacs() {
     local DESKTOP_SOCKET="$1"
     local DETACH="$2"
@@ -138,7 +142,7 @@ function confirm() {
 }
 
 # kill_emacs SESSION
-# Kill the running emacs server named SESSION after getting
+# Kill the running Emacs server named SESSION after getting
 # confirmation from the user. A return value of 1 means something was
 # killed.
 function kill_emacs() {
@@ -215,7 +219,7 @@ function destroy_one_thing() {
     fi
 }
 
-# Recognized flags (FLAG_*) and the values that will be parse from the
+# Recognized flags (FLAG_*) and the values that will be parsed from the
 # command line (ARG_*).
 ARG_HELP="";	     FLAG_HELP="--help"
 ARG_LIST="";	     FLAG_LIST="-l"
@@ -302,27 +306,31 @@ fi
 if [[  -n $ARG_HELP ]]; then
     cat <<EOF
  $0 [OPTIONS] [$FLAG_CONNECT SERVER] [FILE...]
- Run emacs in daemon/client mode, starting the emacs desktop-autosave package
+ Run Emacs in daemon/client mode, starting the Emacs desktop-autosave package
  if available.
    $0 $FLAG_CONNECT SERVER FILE.... 
      connects to SERVER (creating it if necessary) and opens
      FILE... in a new frame (X or text). The buffer persists even when
      the frame is closed
    $0 FILE...
-     connects to an unnamed emacs daemon (creating it if necessary)
+     if already running under a SERVER (eg a shell within an Emacs session
+     started by `ee -c SERVER`), opens a file in that server; that way, you
+     can open files from withing your inferior shell into the parent Emacs
+     session ($EE_CURRENT_SESSION is used for this purpose). Otherwise,
+     connects to an unnamed Emacs daemon (creating it if necessary)
      and opens FILE... in a new frame (X or text). The buffer is
      removed from the server when the frame is closed. This is ideal
      for using as the value of \$EDITOR
    $0 $FLAG_LIST
      lists all the desktop sessions that have been saved.
    $0 $FLAG_KILL SERVER
-     kills the specified running emacs server
+     kills the specified running Emacs server
    $0 $FLAG_KILLALL
-     kills all the running emacs servers
+     kills all the running Emacs servers
    $0 $FLAG_DELETE SERVER
-     deletes from disk the specified emacs server's desktop file
+     deletes from disk the specified Emacs server's desktop file
    $0 $FLAG_DELETEALL
-     deletes from disk all the emacs servers' desktop files
+     deletes from disk all the Emacs servers' desktop files
    $0  $FLAG_HELP
      displays this message
  OPTIONS is one of:
@@ -337,7 +345,7 @@ if [[  -n $ARG_HELP ]]; then
       list of flags users would typically use to invoke ee on the
       command line.
     $FLAG_FLAGSESSIONS
-      list of flags whose values could be an existing emacs server or
+      list of flags whose values could be an existing Emacs server or
       desktop name. This list is formatted for use in a bash case
       statement.
 
@@ -392,19 +400,17 @@ else
 	if [[ -n $TTY ]]; then
 	    DETACH="-nw"
 	elif [[ -n $ARG_CONNECT ]]; then
-	    if [[ -n "$XDEFAULTS_LOCATION" ]]; then
-                     # ensure that the X settings for emacs are up to date
-		xrdb -merge "$XDEFAULTS_LOCATION"
+	    if [ -n "$XDEFAULTS_LOCATION" ] && [ -f "$XDEFAULTS_LOCATION" ]; then
+              # ensure that the X settings for Emacs are up to date
+	      which xrdb && xrdb -merge "$XDEFAULTS_LOCATION"
 	    fi
 	    DETACH="-n"
 	fi
-	if [[ -n $ARG_CONNECT ]]; then
-	    DESKTOP_NAME="$TARGET"
-	    DESKTOP_AUTOSAVE_FORCE="nil"
-	else
-	    DESKTOP_NAME="ee-desktop"
-	    DESKTOP_AUTOSAVE_FORCE="t"
-	fi
+
+	DESKTOP_AUTOSAVE_FORCE="nil"
+        DESKTOP_NAME=${TARGET:-${EE_CURRENT_SESSION}}
+        [[ -z "${DESKTOP_NAME}" ]] && { DESKTOP_AUTOSAVE_FORCE="t" ; DESKTOP_NAME="ee-desktop" ; }
+
 
 	DESKTOP_DIR="$EMACS_DESKTOP_REPOSITORY/$DESKTOP_NAME"
 	DESKTOP_SOCKET_DIR="/tmp/ee/$DESKTOP_NAME"
@@ -415,7 +421,7 @@ else
 
 	SERVER_ACCESS="-s \"$DESKTOP_NAME\" -n"
 
-	EVAL="$EVAL (if (fboundp 'desktop-autosave-start) (desktop-autosave-start  \"${DESKTOP_NAME}\" $DESKTOP_AUTOSAVE_FORCE)) $LOAD_FILE $SELECT_FILE"
+	EVAL="$EVAL (progn (setenv \"EE_CURRENT_SESSION\" \"${TARGET}\") (if (fboundp 'desktop-autosave-start) (desktop-autosave-start  \"${DESKTOP_NAME}\" $DESKTOP_AUTOSAVE_FORCE))) $LOAD_FILE $SELECT_FILE"
 
         # If we just had one file, -c $FILE would work to load and display
         # the one file. In case more than one file is specified, we load
